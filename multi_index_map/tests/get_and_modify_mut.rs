@@ -113,3 +113,36 @@ fn test_non_unique_modify_mut() {
         }
     }
 }
+
+#[test]
+fn test_get_mut_after_remove() {
+    let mut map = MultiIndexTestElementMap::default();
+    for i in 0..10 {
+        if i % 2 == 0 {
+            map.insert(TestElement {
+                field1: 42,
+                field2: i,
+                field3: i,
+            });
+        } else {
+            map.insert(TestElement {
+                field1: 37,
+                field2: i,
+                field3: i,
+            });
+        }
+    }
+
+    map.remove_by_field3(&2);
+
+    let mut_refs: Vec<(&mut usize,)> = map.get_mut_by_field1(&37);
+    for (r,) in mut_refs {
+        *r *= *r
+    }
+
+    let refs: Vec<&TestElement> = map.get_by_field1(&37);
+    for (i, r) in refs.iter().enumerate() {
+        assert_eq!(r.field2, (2 * i + 1) * (2 * i + 1));
+    }
+}
+

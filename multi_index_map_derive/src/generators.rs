@@ -410,21 +410,22 @@ fn generate_field_mut_getter(
             #field_vis fn #mut_getter_name(&mut self, key: &#field_type) -> Vec<(#(&mut #unindexed_types,)*)> {
                 if let Some(idxs) = self.#index_name.get(key) {
                     let mut refs = Vec::with_capacity(idxs.len());
-                    let mut mut_iter = self._store.iter_mut();
-                    let mut last_idx: usize = 0;
-                    for idx in idxs.iter() {
-                        match mut_iter.nth(*idx - last_idx) {
-                            Some(val) => {
-                                refs.push((#(&mut val.1.#unindexed_idents,)*))
-                            },
-                            _ => {
-                                panic!(
-                                    "Error getting mutable reference of non-unique field `{}` in getter.",
-                                    #field_name_str
-                                );
-                            }
+                    if idxs.is_empty() {
+                        return refs;
+                    }
+                    let idxs = idxs.iter().map(|idx| *idx).collect::<Vec<usize>>();
+                    let mut_iter = match self._store.pick_many_mut(&idxs) {
+                        Ok(mut_iter) => mut_iter,
+                        Err(e) => {
+                            panic!(
+                                "Error getting mutable reference of non-unique field `{}` in getter. detail: {:?}",
+                                #field_name_str,
+                                e,
+                            );
                         }
-                        last_idx = *idx + 1;
+                    };
+                    for val in mut_iter {
+                        refs.push((#(&mut val.#unindexed_idents,)*))
                     }
                     refs
                 } else {
@@ -544,23 +545,23 @@ fn generate_field_updater(
                 };
 
                 let mut refs = Vec::with_capacity(idxs.len());
-                let mut mut_iter = self._store.iter_mut();
-                let mut last_idx: usize = 0;
-                for idx in idxs {
-                    match mut_iter.nth(idx - last_idx) {
-                        Some(val) => {
-                            let elem = val.1;
-                            f(#(&mut elem.#unindexed_idents,)*);
-                            refs.push(&*elem);
-                        }
-                        _ => {
-                            panic!(
-                                "Error getting mutable reference of non-unique field `{}` in updater.",
-                                #field_name_str
-                            );
-                        }
+                if idxs.is_empty() {
+                    return refs;
+                }
+                let idxs = idxs.iter().map(|idx| *idx).collect::<Vec<usize>>();
+                let mut mut_iter = match self._store.pick_many_mut(&idxs) {
+                    Ok(mut_iter) => mut_iter,
+                    Err(e) => {
+                        panic!(
+                            "Error getting mutable reference of non-unique field `{}` in updater. detail: {:?}",
+                            #field_name_str,
+                            e
+                        );
                     }
-                    last_idx = idx + 1;
+                };
+                for elem in mut_iter {
+                    f(#(&mut elem.#unindexed_idents,)*);
+                    refs.push(&*elem);
                 }
                 refs
             }
@@ -615,25 +616,26 @@ fn generate_field_modifier(
                     _ => ::std::collections::BTreeSet::<usize>::new()
                 };
                 let mut refs = Vec::with_capacity(idxs.len());
-                let mut mut_iter = self._store.iter_mut();
-                let mut last_idx: usize = 0;
-                for idx in idxs {
-                    match mut_iter.nth(idx - last_idx) {
-                        Some(val) => {
-                            let elem = val.1;
-                            #(#pre_modifies)*
-                            f(elem);
-                            #(#post_modifies)*
-                            refs.push(&*elem);
-                        },
-                        _ => {
-                            panic!(
-                                "Error getting mutable reference of non-unique field `{}` in modifier.",
-                                #field_name_str
-                            );
-                        }
+                if idxs.is_empty() {
+                    return refs;
+                }
+                let idxs = idxs.into_iter().collect::<Vec<usize>>();
+                let idx_mut_iter = match self._store.pick_many_mut(&idxs) {
+                    Ok(mut_iter) => idxs.into_iter().zip(mut_iter.into_iter()),
+                    Err(e) => {
+                        panic!(
+                            "Error getting mutable reference of non-unique field `{0}` in modifier. detail: {1:?}",
+                            #field_name_str,
+                            e,
+                        );
                     }
-                    last_idx = idx + 1;
+                };
+                for (idx, elem) in idx_mut_iter.into_iter() {
+                    #(#pre_modifies)*
+                    f(elem);
+                    #(#post_modifies)*
+                    refs.push(&*elem);
+
                 }
                 refs
             }

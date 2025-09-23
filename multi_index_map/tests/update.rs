@@ -143,3 +143,44 @@ fn test_unique_update() {
         })
     );
 }
+
+#[test]
+fn test_update_after_remove() {
+    let mut map = MultiIndexTestElementMap::default();
+    for i in 0..10 {
+        if i % 2 == 0 {
+            map.insert(TestElement {
+                field1: 42,
+                field2: i as f64,
+                field3: i,
+                field4: i.to_string(),
+                field5: "42".to_string(),
+            });
+        } else {
+            map.insert(TestElement {
+                field1: 37,
+                field2: i as f64,
+                field3: i,
+                field4: i.to_string(),
+                field5: "37".to_string(),
+            });
+        }
+    }
+
+    map.remove_by_field3(&3);
+
+    let refs = map.update_by_field1(&37, |field2, field4| {
+        *field2 = 99.0;
+        *field4 = "NinetyNine".to_string()
+    });
+    for r in refs.iter() {
+        assert_eq!(r.field2, 99.0);
+        assert_eq!(r.field4, "NinetyNine");
+    }
+
+    let refs = map.get_by_field1(&42);
+    for (i, r) in refs.iter().enumerate() {
+        assert_eq!(r.field2, i as f64 * 2.0);
+        assert_eq!(r.field4, (i * 2).to_string());
+    }
+}

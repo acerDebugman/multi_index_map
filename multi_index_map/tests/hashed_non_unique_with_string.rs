@@ -86,3 +86,59 @@ fn get_by_borrowed_string() {
     assert_eq!(res.len(), 1);
     assert_eq!(res.first().unwrap().order_id, 1);
 }
+
+#[test]
+fn modify_after_remove() {
+    let o1 = Order {
+        order_id: 1,
+        timestamp: 111,
+        trader_name: "John".to_string(),
+    };
+
+    let o2 = Order {
+        order_id: 2,
+        timestamp: 22,
+        trader_name: "Mike".to_string(),
+    };
+
+    let o3 = Order {
+        order_id: 3,
+        timestamp: 33,
+        trader_name: "Tom".to_string(),
+    };
+
+    let o4 = Order {
+        order_id: 4,
+        timestamp: 44,
+        trader_name: "Tom".to_string(),
+    };
+
+    let mut map = MultiIndexOrderMap::default();
+
+    let o2_order_id = o2.order_id;
+    
+    map.insert(o1);
+    map.insert(o2);
+    map.insert(o3);
+    map.insert(o4);
+
+    {
+        map.remove_by_order_id(&o2_order_id);
+    }
+
+    let mut s = "test".to_string();
+
+    map.modify_by_trader_name(&"Tom".to_string(), |o| {
+        s = "p".to_string();
+        o.timestamp = 4;
+    });
+
+    assert_eq!(s, "p");
+
+    {
+        let mut it = map.iter_by_timestamp();
+        assert_eq!(it.next().unwrap().order_id, 3);
+        assert_eq!(it.next().unwrap().order_id, 4);
+        assert_eq!(it.next().unwrap().order_id, 1);
+    }   
+}
